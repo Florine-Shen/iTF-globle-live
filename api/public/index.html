@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ITF Juniors · 全球真数据（简化）</title>
+<style>
+:root{--bg:#0b1020;--card:#121831;--muted:#99a2c2;--text:#eaf0ff;--ok:#27c281}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Arial}
+.wrap{max-width:1000px;margin:0 auto;padding:14px}
+.card{background:#121831;border-radius:14px;padding:16px;margin:10px 0}
+label{display:block;font-size:12px;color:var(--muted);margin-top:10px}
+input,select{width:100%;padding:10px;border-radius:10px;border:1px solid #2b3562;background:#0f1430;color:#eaf0ff}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.btn{border:0;padding:10px 14px;border-radius:10px;background:#2b3b6a;color:#dbe7ff;cursor:pointer}
+.btn.ok{background:var(--ok);color:#072015}
+.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#9ac1ff;white-space:pre-wrap}
+.list .item{border:1px solid #253161;border-radius:12px;padding:12px;margin:8px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="card">
+    <h2>抓取 ITF Juniors 2025</h2>
+    <div class="row">
+      <div style="flex:1">
+        <label>国家（Nation，留空=全球）</label>
+        <input id="nation" placeholder="ITA / CHN / USA">
+      </div>
+      <div style="flex:1">
+        <label>出发地（城市, 国家）</label>
+        <input id="home" value="Ploaghe, Italy">
+      </div>
+    </div>
+    <div class="row">
+      <div style="flex:1">
+        <label>成人/儿童</label>
+        <div class="row"><input id="adults" type="number" value="1"/><input id="kids" type="number" value="1"/></div>
+      </div>
+      <div style="flex:1">
+        <label>油价 €/L · 油耗 L/100km</label>
+        <div class="row"><input id="fuelPrice" type="number" value="1.9" step="0.01"/><input id="fuelCons" type="number" value="6.5" step="0.1"/></div>
+      </div>
+      <div style="flex:1">
+        <label>住宿（€/晚·间）</label>
+        <input id="hotelMid" type="number" value="65" />
+      </div>
+    </div>
+    <div class="row">
+      <div style="flex:1">
+        <label>餐费（成人/儿童 €/天）</label>
+        <div class="row"><input id="mealAdult" type="number" value="20"/><input id="mealKid" type="number" value="12"/></div>
+      </div>
+      <div style="flex:1">
+        <label>单程最大可接受时长（小时）</label>
+        <input id="maxHours" type="number" value="5" />
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn" onclick="doFetch()">抓取赛事</button>
+      <button class="btn ok" onclick="makeList()">生成列表</button>
+    </div>
+    <div id="meta" class="mono">尚未抓取。</div>
+  </section>
+
+  <section class="card">
+    <h3>结果</h3>
+    <div id="list" class="list"></div>
+  </section>
+</div>
+
+<script>
+let DATA=null;
+
+async function doFetch(){
+  const nation=document.getElementById('nation').value.trim();
+  const url='/api/itf?year=2025'+(nation?('&nation='+encodeURIComponent(nation)):'');
+  document.getElementById('meta').textContent='抓取中… '+url;
+  try{
+    const r=await fetch(url); const j=await r.json();
+    if(!j.ok && (!j.items||!j.items.length)) throw new Error(j.error||'fetch_failed');
+    DATA=j.items; document.getElementById('meta').textContent=`抓取成功：${j.count} 场（${nation||'全球'}）`;
+  }catch(e){ document.getElementById('meta').textContent='抓取失败：'+e.message; }
+}
+
+async function geocode(city){
+  const u='https://geocoding-api.open-meteo.com/v1/search?count=1&language=zh&format=json&name='+encodeURIComponent(city);
+  const r=await fetch(u); const j=await r.json();
+  if(!j.results||!j.results.length) throw new Error('geo_fail'); const g=j.results[0];
+  return {lat:g.latitude, lon:g.longitude};
+}
+function haversine(a,b,c,d){const R=6371,toRad=x=>x*Math.PI/180, dLat=toRad(c-a), dLon=toRad(d-b);
+  const x=Math.sin(dLat/2)**2+Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dLon/2)**2; return 2*R*Math.asin(Math.sqrt(x));}
+
+async function makeList(){
+  if(!DATA){alert('请先抓取赛事');return;}
+  const home=document.getElementById('home').value.trim()||'Ploaghe, Italy';
+  const maxH=parseFloat(document.getElementById('maxHours').value||'5');
+  const fuelPrice=parseFloat(document.getElementById('fuelPrice').value||'1.9');
+  const fuelCons=parseFloat(document.getElementById('fuelCons').value||'6.5');
+  const hotelMid=parseFloat(document.getElementById('hotelMid').value||'65');
+  const mealA=parseFloat(document.getElementById('mealAdult').value||'20');
+  const mealK=parseFloat(document.getElementById('mealKid').value||'12');
+  const adults=parseInt(document.getElementById('adults').value||'1');
+  const kids=parseInt(document.getElementById('kids').value||'1');
+
+  let homePos; try{homePos=await geocode(home);}catch{return alert('无法定位出发地');}
+
+  const rows=[];
+  for(const t of DATA){
+    if(!t.city) continue;
+    try{
+      const pos=await geocode(t.city+(t.country?(', '+t.country):'')); 
+      const dist=Math.round(haversine(homePos.lat,homePos.lon,pos.lat,pos.lon));
+      const hours=dist/70; if(hours>maxH) continue;
+      const s=new Date(t.startISO||Date.now()), e=new Date(t.endISO||s);
+      const nights=Math.max(1, Math.ceil((e-s)/86400000)+1);
+      const fuelCost=Math.round(dist*(fuelCons/100)*fuelPrice)*2;
+      const mealCost=Math.round(nights*(adults*mealA+kids*mealK));
+      const hotelCost=Math.round(nights*hotelMid);
+      const regFee=t.level==='J30'?20:(t.level==='J60'?30:(t.level==='J100'?40:(t.level==='J200'?50:25)));
+      const total=fuelCost+mealCost+hotelCost+regFee;
+      rows.push({...t,dist,hours:hours.toFixed(1),nights,fuelCost,mealCost,hotelCost,regFee,total});
+    }catch{}
+  }
+  rows.sort((a,b)=>a.total-b.total);
+
+  const list=document.getElementById('list'); list.innerHTML=rows.length?'':'<div class="mono">没有命中的赛事（可放宽“单程时长”或改国家）。</div>';
+  for(const r of rows.slice(0,50)){
+    const div=document.createElement('div'); div.className='item';
+    div.innerHTML=`<div><strong>${r.name||'Unnamed'}</strong></div>
+      <div>${r.city||'-'}, ${r.country||''} | ${r.startISO||'?'} ~ ${r.endISO||'?'} | ${r.level||'-'} | ${r.surface||'-'}</div>
+      <div>门到门：约 ${r.hours}h（自驾，~${r.dist}km）</div>
+      <div>总计 €${r.total} = 报名 €${r.regFee} + 油费 €${r.fuelCost} + 住宿 €${r.hotelCost} + 餐费 €${r.mealCost}</div>`;
+    list.appendChild(div);
+  }
+}
+</script>
+</body>
+</html>
