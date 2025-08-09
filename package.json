@@ -1,0 +1,10 @@
+{
+  "name": "itf-juniors-global-live",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@sparticuz/chromium": "^123.0.1",
+    "puppeteer-core": "^22.15.0"
+  }
+}
