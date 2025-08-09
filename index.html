@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ITF 全球赛事抓取</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        input, button { padding: 8px; margin: 5px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>ITF 全球赛事抓取系统</h1>
+    <label>年份: <input type="number" id="year" value="2025"></label>
+    <label>国家: <input type="text" id="nation" value="ITA"></label>
+    <button onclick="fetchData()">抓取数据</button>
+
+    <table id="resultTable" style="display:none;">
+        <thead>
+            <tr>
+                <th>日期</th>
+                <th>赛事</th>
+                <th>地点</th>
+                <th>类别</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        async function fetchData() {
+            const year = document.getElementById('year').value;
+            const nation = document.getElementById('nation').value;
+            const table = document.getElementById('resultTable');
+            const tbody = table.querySelector('tbody');
+
+            tbody.innerHTML = '';
+            table.style.display = 'none';
+
+            try {
+                const res = await fetch(`/api/itf?year=${year}&nation=${nation}`);
+                const json = await res.json();
+                if (json.success && json.data.length > 0) {
+                    json.data.forEach(row => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `<td>${row.date}</td>
+                                        <td>${row.tournament}</td>
+                                        <td>${row.location}</td>
+                                        <td>${row.category}</td>`;
+                        tbody.appendChild(tr);
+                    });
+                    table.style.display = 'table';
+                } else {
+                    alert('没有找到数据');
+                }
+            } catch (err) {
+                alert('抓取失败：' + err.message);
+            }
+        }
+    </script>
+</body>
+</html>
