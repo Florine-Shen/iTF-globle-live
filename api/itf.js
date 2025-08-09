@@ -89,9 +89,22 @@ export default async function handler(req, res) {
     }).filter(r => r.city || r.name);
 
     res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate');
-    res.status(200).json({ ok:true, source: baseUrl, count: items.length, items });
+    res.status(200).json({
+  ok: true,
+  success: true,          // 新增：兼容前端
+  source: baseUrl,
+  count: items.length,
+  items,
+  data: items             // 新增：兼容前端
+});
   } catch (e) {
-    res.status(200).json({ ok:false, error: String(e), items: [] });
+    res.status(200).json({
+  ok: false,
+  success: false,         // 新增
+  error: String(e),
+  items: [],
+  data: []                // 新增
+});
   } finally {
     try { if (browser) await browser.close(); } catch {}
   }
