@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ITF Juniors · 实时日历 Demo</title>
+  <style>
+    :root{--bg:#0b1020;--card:#121831;--muted:#9bb0ff;--text:#eaf0ff;--accent:#27c281}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Arial}
+    .wrap{max-width:980px;margin:0 auto;padding:16px}
+    .card{background:#121831;border-radius:14px;padding:16px;margin:10px 0}
+    h2{margin:0 0 6px}
+    label{display:block;font-size:12px;color:var(--muted);margin-top:10px}
+    input,button{padding:10px;border-radius:10px;border:1px solid #304070;background:#0f1430;color:#eaf0ff}
+    .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+    button{border:0;background:#2b3b6a;cursor:pointer}
+    button.ok{background:var(--accent);color:#072015}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{border:1px solid #253161;padding:8px;text-align:left;font-size:12px;vertical-align:top}
+    th{background:#0f1733}
+    .mono{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#9ac1ff;white-space:pre-wrap}
+    small{color:#9bb0ff}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="card">
+      <h2>ITF Juniors · 实时日历 Demo</h2>
+      <small>数据来源：ITF 官方公开日历（通过你的 <code>/api/itf</code> 服务端抓取）。首次调用可能 10–20 秒冷启动。</small>
+      <div class="row">
+        <div style="flex:1 1 140px">
+          <label>年份 Year</label>
+          <input id="year" value="2025" />
+        </div>
+        <div style="flex:1 1 220px">
+          <label>国家 Nation（留空=全球；例：ITA / CHN / USA）</label>
+          <input id="nation" placeholder="ITA" />
+        </div>
+      </div>
+      <div class="row">
+        <button onclick="fetchItf()">抓取数据</button>
+        <button class="ok" onclick="copyApi()">复制 API 链接</button>
+      </div>
+      <div id="msg" class="mono" style="margin-top:8px">尚未抓取。</div>
+    </section>
+
+    <section class="card">
+      <h3>结果（最多显示前 150 条）</h3>
+      <table id="tbl" style="display:none">
+        <thead>
+          <tr>
+            <th>赛事</th><th>城市</th><th>国家</th>
+            <th>开始</th><th>结束</th><th>等级</th><th>场地</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    function apiUrl(){
+      const y = (document.getElementById('year').value || '2025').trim();
+      const n = (document.getElementById('nation').value || '').trim();
+      // 直接打你项目自己的 /api/itf
+      return `/api/itf?year=${encodeURIComponent(y)}${n?`&nation=${encodeURIComponent(n)}`:''}`;
+    }
+
+    async function fetchItf(){
+      const msg = document.getElementById('msg');
+      const tbl = document.getElementById('tbl');
+      const tbody = tbl.querySelector('tbody');
+      const url = apiUrl();
+      msg.textContent = '抓取中… ' + url;
+      tbody.innerHTML = ''; tbl.style.display = 'none';
+
+      try{
+        const r = await fetch(url);
+        if(!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        const arr = (j && (j.data?.length ? j.data : j.items)) || [];
+        if(!arr.length){ msg.textContent = '没有数据（可尝试改国家或稍后重试）'; return; }
+
+        for(const t of arr.slice(0,150)){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${t.name||''}</td>
+            <td>${t.city||''}</td>
+            <td>${t.country||''}</td>
+            <td>${t.startISO||''}</td>
+            <td>${t.endISO||''}</td>
+            <td>${t.level||''}</td>
+            <td>${t.surface||''}</td>`;
+          tbody.appendChild(tr);
+        }
+        tbl.style.display = 'table';
+        msg.textContent = `抓取成功：共 ${arr.length} 条，显示前 150 条。`;
+      }catch(e){
+        msg.textContent = '抓取失败：' + e.message + '（首次可能需等 10–20 秒冷启动）';
+      }
+    }
+
+    async function copyApi(){
+      const full = location.origin + apiUrl();
+      try{
+        await navigator.clipboard.writeText(full);
+        alert('已复制：' + full);
+      }catch(e){
+        prompt('无法自动复制，请手动复制：', full);
+      }
+    }
+  </script>
+</body>
+</html>
